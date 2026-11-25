@@ -1,30 +1,81 @@
-// main.ts — "Everyday Things, Two Lines, Longer Run" (make.fun bounty)
+// Everyday Things, Two Lines, Longer Run — v2 resubmit.
 //
-// Writes a two-line explanation of a queue, written for a 10-year-old,
-// to $MAKEFUN_OUTPUT_DIR/entry.txt (default /output/entry.txt) with no
-// trailing newline, and prints the same text to stdout.
+// A toaster, explained to a ten-year-old in exactly two sentences.
+// The first sentence carries one picture all the way through: bread
+// on a sunbed. The second sentence then does the honest work — it
+// says which part of that picture is true and which part would
+// mislead you if you trusted it too far.
 //
-// Line 1 explains the queue through a single analogy: a slow
-// caterpillar made of people, shuffling toward the front. Line 2 is
-// honest about what that picture gets right and where it breaks down.
-// The text is fixed, so every run produces identical output.
+// The program below assembles those two sentences, checks them
+// against the competition gate, and writes them — with no trailing
+// newline — to entry.txt inside $MAKEFUN_OUTPUT_DIR. Nothing here
+// touches the network, reads other files, or varies between runs:
+// the same two sentences come out every time, byte for byte.
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
-const ENTRY = [
-  "A queue is a slow caterpillar made of people, inching forward one wiggle at a time toward the treat at its head.",
-  "It maps the single-file shuffle where nobody overtakes, but it leaves out that people can step out of line whenever they like, while a caterpillar's segments never can.",
-].join("\n");
+const FIRST_LINE =
+  "A toaster is a sunbed for a slice of bread, holding it under glowing bars until it comes out brown, warm, and crisp.";
 
-// The gate wants 1 to 400 characters of non-whitespace UTF-8 text,
-// so refuse to write anything outside that range.
-if (ENTRY.length < 1 || ENTRY.length > 400 || ENTRY.trim().length === 0) {
-  console.error(`entry is ${ENTRY.length} characters, outside the 1-400 gate`);
-  process.exit(1);
+const SECOND_LINE =
+  "It maps the way heat browns the surface just like the sun tans skin, but it leaves out that a sunbed warms the whole body slowly while a toaster only toasts the outside in two minutes.";
+
+function assemble(first: string, second: string): string {
+  const separator = String.fromCharCode(10);
+  return first + separator + second;
 }
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, "entry.txt"), ENTRY, "utf8");
-console.log(ENTRY);
+function checkGate(text: string): void {
+  const lines = text.split("\n");
+  const problems: string[] = [];
+
+  if (lines.length !== 2) {
+    problems.push(`expected exactly 2 lines, got ${lines.length}`);
+  }
+  if (text.length < 1 || text.length > 400) {
+    problems.push(`entry is ${text.length} characters, outside 1-400`);
+  }
+  if (text.trim().length === 0) {
+    problems.push("entry is only whitespace");
+  }
+  if (text.endsWith("\n")) {
+    problems.push("entry must not end with a newline");
+  }
+  for (const [index, line] of lines.entries()) {
+    if (line.trim().length === 0) {
+      problems.push(`line ${index + 1} is empty`);
+    }
+  }
+
+  if (problems.length > 0) {
+    for (const problem of problems) {
+      console.error(`gate failure: ${problem}`);
+    }
+    process.exit(1);
+  }
+}
+
+function outputDirectory(): string {
+  const fromEnv = process.env.MAKEFUN_OUTPUT_DIR;
+  if (fromEnv !== undefined && fromEnv.length > 0) {
+    return fromEnv;
+  }
+  return path.resolve("/output");
+}
+
+function main(): void {
+  const entry = assemble(FIRST_LINE, SECOND_LINE);
+  checkGate(entry);
+
+  const dir = outputDirectory();
+  fs.mkdirSync(dir, { recursive: true });
+  const target = path.join(dir, "entry.txt");
+  // Encode explicitly so the file is UTF-8 with no added newline.
+  const bytes = new TextEncoder().encode(entry);
+  fs.writeFileSync(target, bytes);
+  // Stdout may end with a newline; the file must not.
+  process.stdout.write(entry + "\n");
+}
+
+main();
